@@ -3,7 +3,7 @@
 #include <cmath>
 #include <random>
 #include <omp.h>
-
+#include <set>
 #include <map>
 #include <string>
 #include <fstream>
@@ -214,6 +214,97 @@ public:
 		// put them on a unit circle within [0,1]^2
 		// then iterate : for each interior vertices, set their parameterization to be the average of their neighbor's parameterization.
 		
+		std::map<std::pair<int,int>, int> e_count;
+		for (size_t i = 0; i < indices.size(); i++){
+			int u0 = indices[i].vtx[0];
+			int v0 = indices[i].vtx[1];
+
+			int u1 = indices[i].vtx[1];
+			int v1 = indices[i].vtx[2];
+
+			int u2 = indices[i].vtx[2];
+			int v2 = indices[i].vtx[0];
+
+			e_count[{std::min(u0,v0), std::max(u0,v0)}]++;
+			e_count[{std::min(u1,v1), std::max(u1,v1)}]++;
+			e_count[{std::min(u2,v2), std::max(u2,v2)}]++;
+		}
+
+		std::set<int> b_vertices;
+		std::map<int, std::vector<int>> b_neighbors;
+
+		for (std::map<std::pair<int,int>,int>::iterator it = e_count.begin(); it != e_count.end(); it++) {
+			if (it->second == 1) {
+				int u = it->first.first;
+				int v = it->first.second;
+
+				b_vertices.insert(u);
+				b_vertices.insert(v);
+				b_neighbors[u].push_back(v);
+				b_neighbors[v].push_back(u);
+			}
+		}
+
+		std::set<int> visited;
+		std::vector<int> b;
+
+		int cur = *b_vertices.begin();
+
+		while (true) {
+			b.push_back(cur);
+			visited.insert(cur);
+			
+			int next = -1;
+			for (size_t i = 0; i < b_neighbors[cur].size(); i++){
+				if (!visited.count(b_neighbors[cur][i])) {
+					next = b_neighbors[cur][i]; 
+					break; 
+				}
+			}
+
+			if (next == -1){
+				break;
+			}
+
+			cur = next;
+		}
+
+		double R = 0.5;
+		for (size_t i = 0; i < b.size(); i++) {
+			double theta = 2*M_PI * i / b.size();
+			uvs[b[i]] = Vector(R * cos(theta) + 0.5, R * sin(theta) + 0.5, 0);
+		}
+
+		for (size_t v = 0; v < vertices.size(); v++){
+			if (!b_vertices.count(v)){
+    			uvs[v] = Vector(0.5, 0.5, 0);   // better init in unit square so that it converges faster (advised by prof)
+			}
+		}
+
+		std::map<int, std::vector<int>> nb;
+		for (std::map<std::pair<int,int>,int>::iterator it = e_count.begin(); it != e_count.end(); it++) {
+			nb[it->first.first].push_back(it->first.second);
+			nb[it->first.second].push_back(it->first.first);
+		}
+
+		for (int i = 0; i < 5000; i++) {
+			std::vector<Vector> new_uvs = uvs;
+			for (size_t v = 0; v < vertices.size(); v++) {
+				if (b_vertices.count(v)){
+					continue;
+				}
+
+				Vector avg(0, 0, 0);
+
+				for (size_t j = 0; j < nb[v].size(); j++){
+					avg = avg + uvs[nb[v][j]];
+				}
+
+				new_uvs[v] = avg/nb[v].size();
+			}
+
+			uvs = new_uvs;
+		}
 		
 	}
 	
